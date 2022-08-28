@@ -9,6 +9,7 @@ python = "^3.10"
 sanic = "^22.6.2"
 httpx = "^0.23.0"
 xxhash = "^3.0.0"
+ujson = "^5.4.0"
 
 [tool.poetry.dev-dependencies]
 
