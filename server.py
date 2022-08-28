@@ -1,22 +1,41 @@
 import os
+import logging
 from pathlib import Path
-from typing import Optional
-import httpx
+
 import aiofiles
+import httpx
 import xxhash
 import uvicorn
-from sanic import Sanic
-from sanic.response import raw
+
 from starlette.applications import Starlette
 from starlette.responses import Response, FileResponse
 from starlette.routing import Route
 
 
-async def write_file(path, content):
-    async with aiofiles.open(path, 'wb') as f:
-        await f.write(content)
-    if os.stat(path).st_size == 0:
-        os.remove(path)
+logger = logging.getLogger("uvicorn.error")
+
+
+def get_cache_path(url:str) -> Path:
+    cache_filename = xxhash.xxh64(url).hexdigest()
+    return Path(__file__).parent / 'cache' / cache_filename
+
+
+async def write_file(response) -> None:
+    url = str(response.url)
+    headers = response.headers
+    content_type = headers['Content-Type'].lower()
+
+    if response.status_code == 200 and content_type in {'image/png', 'image/jpeg', 'audio/mpeg', 'application/font-woff'}:
+        cache_path = get_cache_path(url)
+        content = await response.aread()
+        logger.warning(f'Cache miss: {url} ({cache_path})')
+        async with aiofiles.open(cache_path, 'wb') as f:
+            await f.write(content)
+        if os.stat(cache_path).st_size == 0:
+            os.remove(cache_path)
+
+
+client = httpx.AsyncClient(event_hooks={'response': [write_file]})
 
 
 async def serve_proxy_pac(request):
@@ -25,31 +44,25 @@ async def serve_proxy_pac(request):
 
 async def handle_get(request):
     url = str(request.url)
-    cache_filename = xxhash.xxh64(url).hexdigest()
-    cache_path = Path(__file__).parent / 'cache' / cache_filename
+    cache_path = get_cache_path(url)
 
     if cache_path.exists():
-        headers = {'Content-Encoding': 'identity', 'Access-Control-Allow-Origin': '*'}
+        logger.info(f'Cache hit: {url} ({cache_path})')
+        headers = {'Content-Encoding': 'identity', 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/octet-stream' }
         return FileResponse(cache_path, headers=headers)
 
-    response = httpx.get(url, headers=dict(request.headers))
-    headers = response.headers
-    content_type = headers['Content-Type'].lower()
-
-    if cache_filename and content_type in {'image/png', 'image/jpeg', 'audio/mpeg', 'application/font-woff'}:
-        await write_file(cache_path, response.content)
-
+    response = await client.get(url, headers=dict(request.headers))
     return await handle_response(response)
 
 
 async def handle_post(request):
     url = str(request.url)
-    response = httpx.post(url, headers=dict(request.headers), content=await request.body())
+    response = await client.post(url, headers=dict(request.headers), content=await request.body())
     return await handle_response(response)
 
 
 async def handle_response(response):
-    content = response.content
+    content = await response.aread()
     headers = response.headers
     if headers.get('Content-Encoding', '').lower() == 'gzip':
         headers['Content-Encoding'] = 'identity'
@@ -58,7 +71,6 @@ async def handle_response(response):
     return Response(
         content, headers=headers, media_type=response.headers['Content-Type'], status_code=response.status_code
     )
-
 
 routes = [
     Route('/gbf-proxy.pac', endpoint=serve_proxy_pac),
