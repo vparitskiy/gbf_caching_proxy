@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "gbf_caching_proxy"
+version = "0.1.0"
+description = ""
+authors = ["v.paritskiy <v.paritskiy@code-on.be>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+sanic = "^22.6.2"
+httpx = "^0.23.0"
+xxhash = "^3.0.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
