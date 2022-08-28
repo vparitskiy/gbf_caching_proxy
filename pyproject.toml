@@ -6,10 +6,11 @@ authors = ["v.paritskiy <v.paritskiy@code-on.be>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-sanic = "^22.6.2"
 httpx = "^0.23.0"
 xxhash = "^3.0.0"
-ujson = "^5.4.0"
+starlette = "^0.20.4"
+uvicorn = {extras = ["standard"], version = "^0.18.3"}
+aiofiles = "^0.8.0"
 
 [tool.poetry.dev-dependencies]
 
