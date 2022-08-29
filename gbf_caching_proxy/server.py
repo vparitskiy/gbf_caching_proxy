@@ -11,13 +11,12 @@ from starlette.applications import Starlette
 from starlette.responses import Response, FileResponse
 from starlette.routing import Route
 
-
 logger = logging.getLogger("uvicorn.error")
 
 
-def get_cache_path(url:str) -> Path:
+def get_cache_path(url: str) -> Path:
     cache_filename = xxhash.xxh64(url).hexdigest()
-    return Path(__file__).parent / 'cache' / cache_filename
+    return Path(__file__).parent.parent / 'cache' / cache_filename
 
 
 async def write_file(response) -> None:
@@ -25,7 +24,8 @@ async def write_file(response) -> None:
     headers = response.headers
     content_type = headers['Content-Type'].lower()
 
-    if response.status_code == 200 and content_type in {'image/png', 'image/jpeg', 'audio/mpeg', 'application/font-woff'}:
+    if response.status_code == 200 and content_type in {'image/png', 'image/jpeg', 'audio/mpeg',
+                                                        'application/font-woff'}:
         cache_path = get_cache_path(url)
         content = await response.aread()
         logger.warning(f'Cache miss: {url} ({cache_path})')
@@ -38,8 +38,9 @@ async def write_file(response) -> None:
 client = httpx.AsyncClient(event_hooks={'response': [write_file]})
 
 
-async def serve_proxy_pac(request):
-    return FileResponse('gbf-proxy.pac', media_type='application/x-ns-proxy-autoconfig')
+async def serve_proxy_pac_config(request):
+    content = b'''function FindProxyForURL(a,b){return shExpMatch(a,"*granbluefantasy.akamaized.net/*")?"PROXY 127.0.0.1:8899; DIRECT":"DIRECT"}'''
+    return Response(content, media_type='application/x-ns-proxy-autoconfig')
 
 
 async def handle_get(request):
@@ -48,7 +49,8 @@ async def handle_get(request):
 
     if cache_path.exists():
         logger.info(f'Cache hit: {url} ({cache_path})')
-        headers = {'Content-Encoding': 'identity', 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/octet-stream' }
+        headers = {'Content-Encoding': 'identity', 'Access-Control-Allow-Origin': '*',
+                   'Content-Type': 'application/octet-stream'}
         return FileResponse(cache_path, headers=headers)
 
     response = await client.get(url, headers=dict(request.headers))
@@ -72,8 +74,9 @@ async def handle_response(response):
         content, headers=headers, media_type=response.headers['Content-Type'], status_code=response.status_code
     )
 
+
 routes = [
-    Route('/gbf-proxy.pac', endpoint=serve_proxy_pac),
+    Route('/proxy-pac-config', endpoint=serve_proxy_pac_config),
     Route('/{path:path}', endpoint=handle_get, methods=['GET']),
     Route('/{path:path}', endpoint=handle_post, methods=['POST']),
 ]

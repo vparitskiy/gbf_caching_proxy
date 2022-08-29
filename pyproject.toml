@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "gbf_caching_proxy"
 version = "0.1.0"
-description = ""
+description = "Caching proxy for Granblue Fantasy CDN"
 authors = ["v.paritskiy <v.paritskiy@code-on.be>"]
 
 [tool.poetry.dependencies]
